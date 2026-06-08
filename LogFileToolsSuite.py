@@ -22,7 +22,6 @@ from shutil import copyfile
 from docx import Document
 from docx.shared import Pt
 
-
 # ==============================================================================
 # TAB 1: Log File Extract Tool
 # ==============================================================================
@@ -512,7 +511,9 @@ class CheckTool(ttk.Frame):
         )
         cleaned = set()
         for item in all_items:
-            cleaned.add(re.sub(tilde_pattern, "", item))
+            cleaned_item = re.sub(tilde_pattern, "", item)
+            if not cleaned_item.endswith("_rec"):
+                cleaned.add(cleaned_item)
 
         self.log_files_in_archive_display.delete(0, tk.END)
         self.log_files_not_in_archive_display.delete(0, tk.END)
@@ -590,6 +591,8 @@ class ParseTool(ttk.Frame):
         self.batch_file_list = []
         self.batch_current_index = -1
         self.batch_selected_index = -1
+        self.holdover_enabled = tk.IntVar(value=0)
+        self.manual_field_holdover = {}
         self._build_ui()
 
     def _build_ui(self):
@@ -1101,6 +1104,13 @@ class ParseTool(ttk.Frame):
         output_frame = ttk.Frame(master=self)
         output_frame.grid(column=0, row=6, padx=5, pady=5, sticky=tk.E)
 
+        ttk.Checkbutton(
+            master=output_frame,
+            text="Hold over manual fields between publishes?",
+            onvalue=1,
+            offvalue=0,
+            variable=self.holdover_enabled,
+        ).grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
         ttk.Button(
             master=output_frame, text="Publish Info", command=self.publish_info
         ).grid(row=0, column=1, padx=5, pady=5, sticky=tk.E)
@@ -1416,8 +1426,41 @@ class ParseTool(ttk.Frame):
         self.parse_data()
 
     def return_to_batch(self):
+        if self.holdover_enabled.get() == 1:
+            self._save_manual_fields()
         self.batch_listbox.selection_clear(0, tk.END)
         self.reset_clear()
+        if self.holdover_enabled.get() == 1:
+            self._restore_manual_fields()
+
+    def _save_manual_fields(self):
+        """Saves the manually entered fields that should persist between publishes."""
+        self.manual_field_holdover = {
+            "proposal_number": self.proposalnumber_textvar.get(),
+            "name": self.name_textvar.get(),
+            "operator": self.operator_textvar.get(),
+            "nyitorext": self.nyitorext_textvar.get(),
+            "faculty": self.facultypos_intvar.get(),
+            "staff": self.staffpos_intvar.get(),
+            "student": self.studentpos_intvar.get(),
+            "other": self.otherpos_intvar.get(),
+            "logfilearchive": self.logfilearchive_yesno.get(),
+        }
+
+    def _restore_manual_fields(self):
+        """Restores manually entered fields after a reset during batch processing."""
+        if not self.manual_field_holdover:
+            return
+        h = self.manual_field_holdover
+        self.proposalnumber_textvar.set(h["proposal_number"])
+        self.name_textvar.set(h["name"])
+        self.operator_textvar.set(h["operator"])
+        self.nyitorext_textvar.set(h["nyitorext"])
+        self.facultypos_intvar.set(h["faculty"])
+        self.staffpos_intvar.set(h["staff"])
+        self.studentpos_intvar.set(h["student"])
+        self.otherpos_intvar.set(h["other"])
+        self.logfilearchive_yesno.set(h["logfilearchive"])
 
     def publish_info(self):
         self.data_dict["Proposal Number"] = self.proposalnumber_textvar.get()
